@@ -4,27 +4,24 @@ def get_connection():
     return mysql.connector.connect(
         host="localhost",
         user="root",
-        password="your_MySql_Password",
+        password="Your_MySql_Password",
         database="quizengine"
     )
 
 def register():
     conn = get_connection()
     cursor = conn.cursor()
-
-    name = input('enter your name: ').strip()
-    email = input('enter your email: ').strip()
-    password = input('enter your password: ')
-
-    if not name or not email or not password:
-        print("name, email and password cannot be empty.")
-        cursor.close()
-        conn.close()
-        return
-
     try:
+        name = input("enter your name: ").strip()
+        email = input("enter your email: ").strip()
+        password = input("enter your password: ")
+
+        if not name or not email or not password:
+            print("name, email and password cannot be empty.")
+            return
+
         cursor.execute(
-            "insert into users (name, email, password) values(%s, %s, %s)",
+            "insert into users (name, email, password) values (%s, %s, %s)",
             (name, email, password)
         )
         conn.commit()
@@ -36,14 +33,13 @@ def register():
         else:
             print("Registration failed:", e)
 
-    cursor.close()
-    conn.close()
-
+    finally:
+        cursor.close()
+        conn.close()
 
 def list_quizes():
     conn = get_connection()
     cursor = conn.cursor()
-
     try:
         cursor.execute(
             "select quiz_id, title, total_time_min from quizes"
@@ -60,30 +56,26 @@ def list_quizes():
             print(f"{row[0]}. {row[1]} ({row[2]} min)")
 
     except mysql.connector.Error as e:
-        print("unable to load quizzes.", e)
+        print("unable to load quizzes.")
+        print("Database error:", e)
 
     finally:
         cursor.close()
         conn.close()
 
-
 def login():
     conn = get_connection()
     cursor = conn.cursor(buffered=True)
-
-    email = input('enter your email: ').strip()
-    password = input('enter your password: ')
-
-    if not email or not password:
-        print("email and password cannot be empty.")
-        cursor.close()
-        conn.close()
-        return None
-
     try:
+        email = input("enter your email: ").strip()
+        password = input("enter your password: ")
+
+        if not email or not password:
+            print("email and password cannot be empty.")
+            return None
+
         cursor.execute(
-            "select user_id, name from users "
-            "where email=%s and password=%s",
+            "select user_id, name from users where email=%s and password=%s",
             (email, password)
         )
         row = cursor.fetchone()
@@ -96,17 +88,18 @@ def login():
         return None
 
     except mysql.connector.Error as e:
-        print("login failed.", e)
+        print("login failed.")
+        print("Database error:", e)
         return None
 
     finally:
         cursor.close()
         conn.close()
 
-
 def take_quiz(current_user):
     conn = get_connection()
     cursor = conn.cursor()
+    attempt_id = None
 
     try:
         cursor.execute(
@@ -136,8 +129,7 @@ def take_quiz(current_user):
             return
 
         cursor.execute(
-            "select ques_id, ques_text, marks "
-            "from questions where quiz_id=%s",
+            "select ques_id, ques_text, marks from questions where quiz_id=%s",
             (quiz_id,)
         )
         questions = cursor.fetchall()
@@ -147,8 +139,7 @@ def take_quiz(current_user):
             return
 
         cursor.execute(
-            "insert into attempts (user_id, quiz_id) "
-            "values (%s, %s)",
+            "insert into attempts (user_id, quiz_id) values (%s, %s)",
             (current_user, quiz_id)
         )
         conn.commit()
@@ -162,13 +153,10 @@ def take_quiz(current_user):
             ques_text = q[1]
             marks = q[2]
 
-            total_marks += marks
-
             print(f"\nQ{i}. {ques_text} ({marks} mark)")
 
             cursor.execute(
-                "select op_id, op_text, is_correct "
-                "from select_options where ques_id=%s",
+                "select op_id, op_text, is_correct from select_options where ques_id=%s",
                 (ques_id,)
             )
             options = cursor.fetchall()
@@ -177,18 +165,20 @@ def take_quiz(current_user):
                 print("no options available for this question.")
                 continue
 
+            total_marks += marks
+
             for idx, opt in enumerate(options):
                 print(f"{chr(65 + idx)}) {opt[1]}")
 
             answer = input("your answer: ").strip().upper()
 
-            if len(answer) != 1 or not ('A' <= answer <= 'Z'):
-                print("invalid answer. Please enter A, B, C or D.")
+            if len(answer) != 1:
+                print("invalid answer. Please enter a valid option.")
 
                 cursor.execute(
                     "insert into user_answers "
                     "(ques_id, op_id, attempt_id, is_correct) "
-                    "values(%s, %s, %s, %s)",
+                    "values (%s, %s, %s, %s)",
                     (ques_id, None, attempt_id, 0)
                 )
                 conn.commit()
@@ -209,7 +199,7 @@ def take_quiz(current_user):
                 cursor.execute(
                     "insert into user_answers "
                     "(ques_id, op_id, attempt_id, is_correct) "
-                    "values(%s, %s, %s, %s)",
+                    "values (%s, %s, %s, %s)",
                     (ques_id, op_id, attempt_id, is_correct)
                 )
                 conn.commit()
@@ -220,7 +210,7 @@ def take_quiz(current_user):
                 cursor.execute(
                     "insert into user_answers "
                     "(ques_id, op_id, attempt_id, is_correct) "
-                    "values(%s, %s, %s, %s)",
+                    "values (%s, %s, %s, %s)",
                     (ques_id, None, attempt_id, 0)
                 )
                 conn.commit()
@@ -229,8 +219,7 @@ def take_quiz(current_user):
 
         cursor.execute(
             "update attempts "
-            "set total_marks=%s, earned_marks=%s, "
-            "status='completed', finished_at=now() "
+            "set total_marks=%s, earned_marks=%s, status='completed', finished_at=now() "
             "where attempt_id=%s",
             (total_marks, earned_marks, attempt_id)
         )
@@ -247,43 +236,46 @@ def take_quiz(current_user):
         cursor.close()
         conn.close()
 
-
 def result(user_id):
     conn = get_connection()
     cursor = conn.cursor()
 
     try:
         cursor.execute(
-            "select attempt_id, quiz_id, total_marks, earned_marks "
-            "from attempts "
-            "where user_id=%s and status='completed'",
+            "select a.attempt_id, a.quiz_id, q.title, "
+            "a.total_marks, a.earned_marks, a.status "
+            "from attempts a "
+            "join quizes q on a.quiz_id = q.quiz_id "
+            "where a.user_id=%s and a.status='completed' "
+            "order by a.attempt_id desc",
             (user_id,)
         )
         rows = cursor.fetchall()
 
         if not rows:
-            print("you have not attempted any quizzes yet.")
+            print("you have not completed any quizzes yet.")
             return
 
         print("\nYour results:")
 
         for r in rows:
             print(
-                f"Attempt {r[0]} | "
-                f"Quiz {r[1]} | "
-                f"Score: {r[3]}/{r[2]}"
+                f"Attempt ID: {r[0]} | "
+                f"Quiz: {r[2]} | "
+                f"Score: {r[4]}/{r[3]} | "
+                f"Status: {r[5]}"
             )
 
     except mysql.connector.Error as e:
-        print("unable to load your results.", e)
+        print("unable to load your results.")
+        print("Database error:", e)
 
     finally:
         cursor.close()
         conn.close()
 
-
 def main():
-    print('=== QUIZ ENGINE ===')
+    print("=== QUIZ ENGINE ===")
     current_user = None
 
     while True:
@@ -295,39 +287,32 @@ def main():
         print("6. Exit")
 
         try:
-            choice = int(input('enter your choice: '))
+            choice = int(input("enter your choice: "))
         except ValueError:
             print("please enter a number from 1 to 6.")
             continue
 
         if choice == 1:
             register()
-
         elif choice == 2:
             current_user = login()
-
         elif choice == 3:
             list_quizes()
-
         elif choice == 4:
             if current_user is None:
                 print("please login first bro.")
             else:
                 take_quiz(current_user)
-
         elif choice == 5:
             if current_user is None:
                 print("please login first bro.")
             else:
                 result(current_user)
-
         elif choice == 6:
-            print("Thankyou for using Quiz Engine!")
+            print("Thank you for using Quiz Engine!")
             print("Bye Bye bro!")
             break
-
         else:
             print("invalid choice. Please select 1 to 6.")
-
 
 main()
